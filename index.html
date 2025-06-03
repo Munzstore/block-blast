@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Block Blast Clone</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            background: #111;
+            color: white;
+            text-align: center;
+            margin: 0;
+            padding: 20px;
+        }
+
+        h1 {
+            margin-bottom: 10px;
+        }
+
+        #score {
+            font-size: 24px;
+            color: #00e676;
+            margin-bottom: 20px;
+        }
+
+        .game-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+        }
+
+        #board {
+            display: grid;
+            grid-template-columns: repeat(8, 40px);
+            grid-template-rows: repeat(8, 40px);
+            gap: 2px;
+            background-color: #333;
+            padding: 10px;
+        }
+
+        .cell {
+            width: 40px;
+            height: 40px;
+            background-color: #444;
+            border-radius: 4px;
+        }
+
+        .filled {
+            /* base class for filled cells */
+        }
+
+        #pieces {
+            display: flex;
+            gap: 20px;
+        }
+
+        .piece {
+            display: grid;
+            gap: 2px;
+            cursor: grab;
+        }
+
+        .piece-cell {
+            width: 40px;
+            height: 40px;
+            border-radius: 4px;
+        }
+
+        .color1 {
+            background-color: #f44336;
+        }
+
+        .color2 {
+            background-color: #4caf50;
+        }
+
+        .color3 {
+            background-color: #ff9800;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Block Blast Mini</h1>
+    <div id="score">Skor: 0</div>
+    <div class="game-container">
+        <div id="board"></div>
+        <div id="pieces"></div>
+    </div>
+
+    <!-- Audio elements -->
+    <audio id="placeSound" src="place.mp3"></audio>
+    <audio id="clearSound" src="clear.mp3"></audio>
+
+    <script>
+        const board = document.getElementById('board');
+        const piecesContainer = document.getElementById('pieces');
+        const scoreDisplay = document.getElementById('score');
+
+        // Audio
+        const placeSound = document.getElementById('placeSound');
+        const clearSound = document.getElementById('clearSound');
+
+        const boardSize = 8;
+        let score = 0;
+        let boardData = Array(boardSize).fill().map(() => Array(boardSize).fill(0));
+
+        const allShapes = [
+            [[1, 1, 1]],
+            [[1], [1], [1]],
+            [[1, 1], [1, 0]],
+            [[1, 1], [0, 1]],
+            [[1, 1]],
+            [[1]],
+            [[1, 1, 0], [0, 1, 1]],
+            [[1, 1, 1], [1, 0, 0]],
+            [[1, 1, 1], [0, 0, 1]],
+            [[1, 0], [1, 1], [0, 1]]
+        ];
+
+        const colors = ['color1', 'color2', 'color3'];
+
+        let currentPieces = [];
+
+        function renderBoard() {
+            board.innerHTML = '';
+            for (let y = 0; y < boardSize; y++) {
+                for (let x = 0; x < boardSize; x++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'cell';
+                    if (boardData[y][x]) {
+                        cell.classList.add('filled');
+                        cell.classList.add(boardData[y][x]);
+                    }
+                    board.appendChild(cell);
+                }
+            }
+        }
+
+        function generateNewPieces() {
+            currentPieces = [];
+            for (let i = 0; i < 3; i++) {
+                const randShape = Math.floor(Math.random() * allShapes.length);
+                const randColor = colors[Math.floor(Math.random() * colors.length)];
+                currentPieces.push({ shape: allShapes[randShape], color: randColor });
+            }
+        }
+
+        function renderPieces() {
+            piecesContainer.innerHTML = '';
+            currentPieces.forEach((pieceData, index) => {
+                const { shape, color } = pieceData;
+                const piece = document.createElement('div');
+                piece.className = 'piece';
+                piece.style.gridTemplateColumns = `repeat(${shape[0].length}, 40px)`;
+
+                shape.forEach(row => {
+                    row.forEach(cell => {
+                        const cellDiv = document.createElement('div');
+                        if (cell) cellDiv.className = `piece-cell ${color}`;
+                        else cellDiv.style.visibility = 'hidden';
+                        piece.appendChild(cellDiv);
+                    });
+                });
+
+                piece.draggable = true;
+                piece.dataset.index = index;
+                piece.addEventListener('dragstart', e => {
+                    e.dataTransfer.setData('text/plain', index);
+                });
+
+                piecesContainer.appendChild(piece);
+            });
+        }
+
+        function canPlace(shape, startX, startY) {
+            for (let y = 0; y < shape.length; y++) {
+                for (let x = 0; x < shape[y].length; x++) {
+                    if (shape[y][x]) {
+                        const bx = startX + x;
+                        const by = startY + y;
+                        if (bx < 0 || bx >= boardSize || by < 0 || by >= boardSize || boardData[by][bx]) {
+                            return false;
+                        }
+                    }
+                }
+            }
+            return true;
+        }
+
+        function placePiece(shape, startX, startY, color) {
+            for (let y = 0; y < shape.length; y++) {
+                for (let x = 0; x < shape[y].length; x++) {
+                    if (shape[y][x]) {
+                        boardData[startY + y][startX + x] = color;
+                    }
+                }
+            }
+            clearLines();
+
+            // Mainkan suara saat blok ditempatkan
+            placeSound.currentTime = 0;
+            placeSound.play();
+        }
+
+        function clearLines() {
+            let cleared = 0;
+
+            for (let y = 0; y < boardSize; y++) {
+                if (boardData[y].every(cell => cell && typeof cell === 'string')) {
+                    boardData[y] = Array(boardSize).fill(0);
+                    cleared++;
+                }
+            }
+
+            for (let x = 0; x < boardSize; x++) {
+                let full = true;
+                for (let y = 0; y < boardSize; y++) {
+                    if (!boardData[y][x] || typeof boardData[y][x] !== 'string') {
+                        full = false;
+                        break;
+                    }
+                }
+                if (full) {
+                    for (let y = 0; y < boardSize; y++) {
+                        boardData[y][x] = 0;
+                    }
+                    cleared++;
+                }
+            }
+
+            if (cleared > 0) {
+                // Mainkan suara saat baris/kolom dibersihkan
+                clearSound.currentTime = 0;
+                clearSound.play();
+
+                score += cleared * 100;
+                scoreDisplay.textContent = `Skor: ${score}`;
+            }
+        }
+
+        board.addEventListener('dragover', e => e.preventDefault());
+        board.addEventListener('drop', e => {
+            e.preventDefault();
+            const index = parseInt(e.dataTransfer.getData('text/plain'));
+            const pieceData = currentPieces[index];
+            if (!pieceData) return;
+
+            const { shape, color } = pieceData;
+            const rect = board.getBoundingClientRect();
+            const x = Math.floor((e.clientX - rect.left) / 42);
+            const y = Math.floor((e.clientY - rect.top) / 42);
+
+            if (canPlace(shape, x, y)) {
+                placePiece(shape, x, y, color);
+                currentPieces.splice(index, 1);
+                if (currentPieces.length === 0) {
+                    generateNewPieces();
+                }
+                renderBoard();
+                renderPieces();
+            }
+        });
+
+        generateNewPieces();
+        renderBoard();
+        renderPieces();
+    </script>
+</body>
+
+</html>
