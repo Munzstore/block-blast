@@ -1,274 +1,357 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Block Blast Clone</title>
-    <style>
-        body {
-            font-family: sans-serif;
-            background: #111;
-            color: white;
-            text-align: center;
-            margin: 0;
-            padding: 20px;
-        }
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Block Blast Mini - Drag Drop Mobile Friendly</title>
+<style>
+  body {
+    font-family: sans-serif;
+    background: #111;
+    color: white;
+    text-align: center;
+    margin: 0; padding: 20px;
+  }
+  #score {
+    font-size: 24px;
+    color: #00e676;
+    margin-bottom: 20px;
+  }
+  #board {
+    display: grid;
+    grid-template-columns: repeat(8, 40px);
+    grid-template-rows: repeat(8, 40px);
+    gap: 2px;
+    background-color: #333;
+    padding: 10px;
+    margin: 0 auto 20px;
+    width: max-content;
+    touch-action: none; /* penting agar touchmove bisa diproses */
+  }
+  .cell {
+    width: 40px;
+    height: 40px;
+    background-color: #444;
+    border-radius: 4px;
+  }
+  .filled.color1 { background-color: #f44336; }
+  .filled.color2 { background-color: #4caf50; }
+  .filled.color3 { background-color: #ff9800; }
 
-        h1 {
-            margin-bottom: 10px;
-        }
+  #pieces {
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+    user-select: none;
+  }
+  .piece {
+    display: grid;
+    gap: 2px;
+    cursor: grab;
+    position: relative;
+    touch-action: none;
+  }
+  .piece-cell {
+    width: 40px;
+    height: 40px;
+    border-radius: 4px;
+  }
+  .color1 { background-color: #f44336; }
+  .color2 { background-color: #4caf50; }
+  .color3 { background-color: #ff9800; }
 
-        #score {
-            font-size: 24px;
-            color: #00e676;
-            margin-bottom: 20px;
-        }
-
-        .game-container {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 20px;
-        }
-
-        #board {
-            display: grid;
-            grid-template-columns: repeat(8, 40px);
-            grid-template-rows: repeat(8, 40px);
-            gap: 2px;
-            background-color: #333;
-            padding: 10px;
-        }
-
-        .cell {
-            width: 40px;
-            height: 40px;
-            background-color: #444;
-            border-radius: 4px;
-        }
-
-        .filled {
-            /* base class for filled cells */
-        }
-
-        #pieces {
-            display: flex;
-            gap: 20px;
-        }
-
-        .piece {
-            display: grid;
-            gap: 2px;
-            cursor: grab;
-        }
-
-        .piece-cell {
-            width: 40px;
-            height: 40px;
-            border-radius: 4px;
-        }
-
-        .color1 {
-            background-color: #f44336;
-        }
-
-        .color2 {
-            background-color: #4caf50;
-        }
-
-        .color3 {
-            background-color: #ff9800;
-        }
-    </style>
+  /* Dragging style */
+  .dragging {
+    opacity: 0.7;
+    position: fixed;
+    pointer-events: none;
+    z-index: 1000;
+  }
+</style>
 </head>
-
 <body>
-    <h1>Block Blast Mini</h1>
-    <div id="score">Skor: 0</div>
-    <div class="game-container">
-        <div id="board"></div>
-        <div id="pieces"></div>
-    </div>
+<h1>Block Blast Mini - Drag & Drop Mobile Friendly</h1>
+<div id="score">Skor: 0</div>
+<div id="board"></div>
+<div id="pieces"></div>
 
-    <!-- Audio elements -->
-    <audio id="placeSound" src="place.mp3"></audio>
-    <audio id="clearSound" src="clear.mp3"></audio>
+<script>
+const board = document.getElementById('board');
+const piecesContainer = document.getElementById('pieces');
+const scoreDisplay = document.getElementById('score');
 
-    <script>
-        const board = document.getElementById('board');
-        const piecesContainer = document.getElementById('pieces');
-        const scoreDisplay = document.getElementById('score');
+const boardSize = 8;
+let score = 0;
+let boardData = Array(boardSize).fill().map(() => Array(boardSize).fill(0));
 
-        // Audio
-        const placeSound = document.getElementById('placeSound');
-        const clearSound = document.getElementById('clearSound');
+const allShapes = [
+  [[1,1,1]],
+  [[1],[1],[1]],
+  [[1,1],[1,0]],
+  [[1,1],[0,1]],
+  [[1,1]],
+  [[1]],
+  [[1,1,0],[0,1,1]],
+  [[1,1,1],[1,0,0]],
+  [[1,1,1],[0,0,1]],
+  [[1,0],[1,1],[0,1]]
+];
 
-        const boardSize = 8;
-        let score = 0;
-        let boardData = Array(boardSize).fill().map(() => Array(boardSize).fill(0));
+const colors = ['color1', 'color2', 'color3'];
+let currentPieces = [];
 
-        const allShapes = [
-            [[1, 1, 1]],
-            [[1], [1], [1]],
-            [[1, 1], [1, 0]],
-            [[1, 1], [0, 1]],
-            [[1, 1]],
-            [[1]],
-            [[1, 1, 0], [0, 1, 1]],
-            [[1, 1, 1], [1, 0, 0]],
-            [[1, 1, 1], [0, 0, 1]],
-            [[1, 0], [1, 1], [0, 1]]
-        ];
+// Rendering board
+function renderBoard() {
+  board.innerHTML = '';
+  for(let y=0; y<boardSize; y++) {
+    for(let x=0; x<boardSize; x++) {
+      const cell = document.createElement('div');
+      cell.className = 'cell';
+      if(boardData[y][x]) {
+        cell.classList.add('filled', boardData[y][x]);
+      }
+      board.appendChild(cell);
+    }
+  }
+}
 
-        const colors = ['color1', 'color2', 'color3'];
+// Generate pieces
+function generateNewPieces() {
+  currentPieces = [];
+  for(let i=0; i<3; i++) {
+    const randShape = Math.floor(Math.random()*allShapes.length);
+    const randColor = colors[Math.floor(Math.random()*colors.length)];
+    currentPieces.push({shape: allShapes[randShape], color: randColor});
+  }
+}
 
-        let currentPieces = [];
+// Render pieces
+function renderPieces() {
+  piecesContainer.innerHTML = '';
+  currentPieces.forEach((pieceData, index) => {
+    const {shape, color} = pieceData;
+    const piece = document.createElement('div');
+    piece.className = 'piece';
+    piece.style.gridTemplateColumns = `repeat(${shape[0].length}, 40px)`;
+    piece.dataset.index = index;
 
-        function renderBoard() {
-            board.innerHTML = '';
-            for (let y = 0; y < boardSize; y++) {
-                for (let x = 0; x < boardSize; x++) {
-                    const cell = document.createElement('div');
-                    cell.className = 'cell';
-                    if (boardData[y][x]) {
-                        cell.classList.add('filled');
-                        cell.classList.add(boardData[y][x]);
-                    }
-                    board.appendChild(cell);
-                }
-            }
+    shape.forEach(row => {
+      row.forEach(cell => {
+        const cellDiv = document.createElement('div');
+        cellDiv.className = cell ? `piece-cell ${color}` : 'piece-cell';
+        if(!cell) cellDiv.style.visibility = 'hidden';
+        piece.appendChild(cellDiv);
+      });
+    });
+
+    piecesContainer.appendChild(piece);
+  });
+}
+
+function canPlace(shape, startX, startY) {
+  for(let y=0; y<shape.length; y++) {
+    for(let x=0; x<shape[y].length; x++) {
+      if(shape[y][x]) {
+        const bx = startX + x;
+        const by = startY + y;
+        if(bx < 0 || bx >= boardSize || by < 0 || by >= boardSize || boardData[by][bx]) {
+          return false;
         }
+      }
+    }
+  }
+  return true;
+}
 
-        function generateNewPieces() {
-            currentPieces = [];
-            for (let i = 0; i < 3; i++) {
-                const randShape = Math.floor(Math.random() * allShapes.length);
-                const randColor = colors[Math.floor(Math.random() * colors.length)];
-                currentPieces.push({ shape: allShapes[randShape], color: randColor });
-            }
-        }
+function placePiece(shape, startX, startY, color) {
+  for(let y=0; y<shape.length; y++) {
+    for(let x=0; x<shape[y].length; x++) {
+      if(shape[y][x]) {
+        boardData[startY + y][startX + x] = color;
+      }
+    }
+  }
+  clearLines();
+}
 
-        function renderPieces() {
-            piecesContainer.innerHTML = '';
-            currentPieces.forEach((pieceData, index) => {
-                const { shape, color } = pieceData;
-                const piece = document.createElement('div');
-                piece.className = 'piece';
-                piece.style.gridTemplateColumns = `repeat(${shape[0].length}, 40px)`;
+function clearLines() {
+  let cleared = 0;
+  for(let y=0; y<boardSize; y++) {
+    if(boardData[y].every(cell => cell && typeof cell === 'string')) {
+      boardData[y] = Array(boardSize).fill(0);
+      cleared++;
+    }
+  }
+  for(let x=0; x<boardSize; x++) {
+    let full = true;
+    for(let y=0; y<boardSize; y++) {
+      if(!boardData[y][x] || typeof boardData[y][x] !== 'string') {
+        full = false;
+        break;
+      }
+    }
+    if(full) {
+      for(let y=0; y<boardSize; y++) {
+        boardData[y][x] = 0;
+      }
+      cleared++;
+    }
+  }
+  if(cleared > 0) {
+    score += cleared * 100;
+    scoreDisplay.textContent = `Skor: ${score}`;
+  }
+}
 
-                shape.forEach(row => {
-                    row.forEach(cell => {
-                        const cellDiv = document.createElement('div');
-                        if (cell) cellDiv.className = `piece-cell ${color}`;
-                        else cellDiv.style.visibility = 'hidden';
-                        piece.appendChild(cellDiv);
-                    });
-                });
+// --- DRAG & DROP WITH MOUSE + TOUCH SUPPORT ---
 
-                piece.draggable = true;
-                piece.dataset.index = index;
-                piece.addEventListener('dragstart', e => {
-                    e.dataTransfer.setData('text/plain', index);
-                });
+let draggingPiece = null;
+let dragOffsetX = 0;
+let dragOffsetY = 0;
 
-                piecesContainer.appendChild(piece);
-            });
-        }
+function onDragStart(e) {
+  e.preventDefault();
+  draggingPiece = e.currentTarget;
+  draggingPiece.classList.add('dragging');
 
-        function canPlace(shape, startX, startY) {
-            for (let y = 0; y < shape.length; y++) {
-                for (let x = 0; x < shape[y].length; x++) {
-                    if (shape[y][x]) {
-                        const bx = startX + x;
-                        const by = startY + y;
-                        if (bx < 0 || bx >= boardSize || by < 0 || by >= boardSize || boardData[by][bx]) {
-                            return false;
-                        }
-                    }
-                }
-            }
-            return true;
-        }
+  let clientX, clientY;
+  if(e.type === 'mousedown') {
+    clientX = e.clientX;
+    clientY = e.clientY;
+  } else if(e.type === 'touchstart') {
+    clientX = e.touches[0].clientX;
+    clientY = e.touches[0].clientY;
+  }
 
-        function placePiece(shape, startX, startY, color) {
-            for (let y = 0; y < shape.length; y++) {
-                for (let x = 0; x < shape[y].length; x++) {
-                    if (shape[y][x]) {
-                        boardData[startY + y][startX + x] = color;
-                    }
-                }
-            }
-            clearLines();
+  const rect = draggingPiece.getBoundingClientRect();
+  dragOffsetX = clientX - rect.left;
+  dragOffsetY = clientY - rect.top;
 
-            // Mainkan suara saat blok ditempatkan
-            placeSound.currentTime = 0;
-            placeSound.play();
-        }
+  movePiece(clientX, clientY);
 
-        function clearLines() {
-            let cleared = 0;
+  window.addEventListener('mousemove', onDragMove);
+  window.addEventListener('touchmove', onDragMove, {passive:false});
+  window.addEventListener('mouseup', onDragEnd);
+  window.addEventListener('touchend', onDragEnd);
+}
 
-            for (let y = 0; y < boardSize; y++) {
-                if (boardData[y].every(cell => cell && typeof cell === 'string')) {
-                    boardData[y] = Array(boardSize).fill(0);
-                    cleared++;
-                }
-            }
+function onDragMove(e) {
+  if(!draggingPiece) return;
 
-            for (let x = 0; x < boardSize; x++) {
-                let full = true;
-                for (let y = 0; y < boardSize; y++) {
-                    if (!boardData[y][x] || typeof boardData[y][x] !== 'string') {
-                        full = false;
-                        break;
-                    }
-                }
-                if (full) {
-                    for (let y = 0; y < boardSize; y++) {
-                        boardData[y][x] = 0;
-                    }
-                    cleared++;
-                }
-            }
+  e.preventDefault();
 
-            if (cleared > 0) {
-                // Mainkan suara saat baris/kolom dibersihkan
-                clearSound.currentTime = 0;
-                clearSound.play();
+  let clientX, clientY;
+  if(e.type === 'mousemove') {
+    clientX = e.clientX;
+    clientY = e.clientY;
+  } else if(e.type === 'touchmove') {
+    clientX = e.touches[0].clientX;
+    clientY = e.touches[0].clientY;
+  }
 
-                score += cleared * 100;
-                scoreDisplay.textContent = `Skor: ${score}`;
-            }
-        }
+  movePiece(clientX, clientY);
+}
 
-        board.addEventListener('dragover', e => e.preventDefault());
-        board.addEventListener('drop', e => {
-            e.preventDefault();
-            const index = parseInt(e.dataTransfer.getData('text/plain'));
-            const pieceData = currentPieces[index];
-            if (!pieceData) return;
+function movePiece(clientX, clientY) {
+  draggingPiece.style.left = (clientX - dragOffsetX) + 'px';
+  draggingPiece.style.top = (clientY - dragOffsetY) + 'px';
+  draggingPiece.style.position = 'fixed';
+  draggingPiece.style.zIndex = 1000;
+  draggingPiece.style.pointerEvents = 'none';
+}
 
-            const { shape, color } = pieceData;
-            const rect = board.getBoundingClientRect();
-            const x = Math.floor((e.clientX - rect.left) / 42);
-            const y = Math.floor((e.clientY - rect.top) / 42);
+function onDragEnd(e) {
+  if(!draggingPiece) return;
 
-            if (canPlace(shape, x, y)) {
-                placePiece(shape, x, y, color);
-                currentPieces.splice(index, 1);
-                if (currentPieces.length === 0) {
-                    generateNewPieces();
-                }
-                renderBoard();
-                renderPieces();
-            }
-        });
+  e.preventDefault();
 
-        generateNewPieces();
-        renderBoard();
-        renderPieces();
-    </script>
+  // Hitung posisi drop relatif ke board
+  let clientX, clientY;
+  if(e.type === 'mouseup') {
+    clientX = e.clientX;
+    clientY = e.clientY;
+  } else if(e.type === 'touchend') {
+    // touchend event tidak punya touches, pakai changedTouches
+    if(e.changedTouches && e.changedTouches.length > 0) {
+      clientX = e.changedTouches[0].clientX;
+      clientY = e.changedTouches[0].clientY;
+    } else {
+      clientX = 0; clientY = 0;
+    }
+  }
+
+  const rect = board.getBoundingClientRect();
+  const x = Math.floor((clientX - rect.left) / 42);
+  const y = Math.floor((clientY - rect.top) / 42);
+
+  const index = parseInt(draggingPiece.dataset.index);
+  const pieceData = currentPieces[index];
+  if(pieceData && canPlace(pieceData.shape, x, y)) {
+    placePiece(pieceData.shape, x, y, pieceData.color);
+    currentPieces.splice(index, 1);
+    if(currentPieces.length === 0) generateNewPieces();
+  }
+
+  // Reset style
+  draggingPiece.style.position = '';
+  draggingPiece.style.left = '';
+  draggingPiece.style.top = '';
+  draggingPiece.style.zIndex = '';
+  draggingPiece.style.pointerEvents = '';
+  draggingPiece.classList.remove('dragging');
+
+  draggingPiece = null;
+  renderBoard();
+  renderPieces();
+
+  window.removeEventListener('mousemove', onDragMove);
+  window.removeEventListener('touchmove', onDragMove);
+  window.removeEventListener('mouseup', onDragEnd);
+  window.removeEventListener('touchend', onDragEnd);
+}
+
+// Pasang event listener drag untuk setiap piece
+function attachDragListeners() {
+  document.querySelectorAll('.piece').forEach(piece => {
+    piece.addEventListener('mousedown', onDragStart);
+    piece.addEventListener('touchstart', onDragStart, {passive:false});
+  });
+}
+
+// Update renderPieces untuk attach event setelah render
+function renderPieces() {
+  piecesContainer.innerHTML = '';
+  currentPieces.forEach((pieceData, index) => {
+    const {shape, color} = pieceData;
+    const piece = document.createElement('div');
+    piece.className = 'piece';
+    piece.style.gridTemplateColumns = `repeat(${shape[0].length}, 40px)`;
+    piece.dataset.index = index;
+
+    shape.forEach(row => {
+      row.forEach(cell => {
+        const cellDiv = document.createElement('div');
+        cellDiv.className = cell ? `piece-cell ${color}` : 'piece-cell';
+        if(!cell) cellDiv.style.visibility = 'hidden';
+        piece.appendChild(cellDiv);
+      });
+    });
+
+    piecesContainer.appendChild(piece);
+  });
+  attachDragListeners();
+}
+
+// Initialize game
+function init() {
+  generateNewPieces();
+  renderBoard();
+  renderPieces();
+  score = 0;
+  scoreDisplay.textContent = `Skor: ${score}`;
+}
+
+init();
+</script>
 </body>
-
 </html>
